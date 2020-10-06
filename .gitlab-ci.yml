@@ -10,7 +10,8 @@ stages:
 variables:
     RVNBINRESOURCE_COMMIT: 35d1628e4bacf5733785a01eb8bb4a0e7a8b0a0e
     RVNSQLITE_COMMIT: 6838f3a984e46647d8bb73d9eae34a5fe0adac17
-    RVNMETADATA_COMMIT: 2cd0c5d19d65737a84ff486231d3ce203f171b86
+    RVNJSONRESOURCE_COMMIT: 52b56d50da04e3cd43833ffd3e26504dd27b3a24
+    RVNMETADATA_COMMIT: 27c1975ae4df6e941db05be42f2b49204a4882ac
 
 
 .build_dependency:
@@ -50,6 +51,17 @@ prepare:rvnbinresource:
         DEPENDENCY_COMMIT: $RVNBINRESOURCE_COMMIT
         DEPENDENCY_DEPENDENCIES: "cmake g++ libboost-test-dev libboost-filesystem-dev"
 
+prepare:rvnjsonresource:
+    stage: setup:1
+
+    extends: .build_dependency
+
+    variables:
+        DEPENDENCY_NAME: rvnjsonresource
+        DEPENDENCY_COMMIT: $RVNJSONRESOURCE_COMMIT
+        DEPENDENCY_DEPENDENCIES: "cmake g++ libboost-test-dev libboost-filesystem-dev"
+
+
 prepare:rvnsqlite:
     stage: setup:1
 
@@ -68,6 +80,7 @@ prepare:rvnmetadata:
     dependencies:
         - prepare:rvnsqlite
         - prepare:rvnbinresource
+        - prepare:rvnjsonresource
 
     variables:
         DEPENDENCY_NAME: rvnmetadata
@@ -75,6 +88,7 @@ prepare:rvnmetadata:
         DEPENDENCY_DEPENDENCIES: "cmake g++ libboost-test-dev libboost-filesystem-dev libboost-program-options-dev libmagic-dev libsqlite3-dev"
         DEPENDENCY_CMAKE_EXTRA_ARGS: |
                 -Drvnbinresource_DIR=$CI_PROJECT_DIR/rvnbinresource/share/cmake/rvnbinresource
+                -Drvnjsonresource_DIR=$CI_PROJECT_DIR/rvnjsonresource/share/cmake/rvnjsonresource
                 -Drvnsqlite_DIR=$CI_PROJECT_DIR/rvnsqlite/share/cmake/rvnsqlite
                 -Dsqlite3_DIR=$CI_PROJECT_DIR/rvnsqlite/share/cmake/sqlite3
 
@@ -85,6 +99,7 @@ prepare:rvnmetadata:
     dependencies:
         - prepare:rvnsqlite
         - prepare:rvnbinresource
+        - prepare:rvnjsonresource
         - prepare:rvnmetadata
 
     script:
@@ -93,6 +108,7 @@ prepare:rvnmetadata:
         - cmake -DCMAKE_C_COMPILER=$CMAKE_C_COMPILER -DCMAKE_CXX_COMPILER=$CMAKE_CXX_COMPILER
                 -DBUILD_TEST_COVERAGE=$BUILD_TEST_COVERAGE
                 -Drvnbinresource_DIR=$CI_PROJECT_DIR/rvnbinresource/share/cmake/rvnbinresource
+                -Drvnjsonresource_DIR=$CI_PROJECT_DIR/rvnjsonresource/share/cmake/rvnjsonresource
                 -Drvnmetadata_DIR=$CI_PROJECT_DIR/rvnmetadata/share/cmake/rvnmetadata
                 -Dmagic_DIR=$CI_PROJECT_DIR/rvnmetadata/share/cmake/magic
                 -Drvnsqlite_DIR=$CI_PROJECT_DIR/rvnsqlite/share/cmake/rvnsqlite
@@ -108,7 +124,7 @@ build:gcc:
     extends: .build
 
     before_script:
-        - apt-get update && apt-get install -y cmake g++ libboost-test-dev libmagic-dev libsqlite3-dev
+        - apt-get update && apt-get install -y cmake g++ libboost-test-dev libboost-filesystem-dev libmagic-dev libsqlite3-dev
 
     variables:
         CMAKE_C_COMPILER: gcc
@@ -119,7 +135,7 @@ build:clang:
     extends: .build
 
     before_script:
-        - apt-get update && apt-get install -y cmake clang libboost-test-dev libmagic-dev libsqlite3-dev
+        - apt-get update && apt-get install -y cmake clang libboost-test-dev libboost-filesystem-dev libmagic-dev libsqlite3-dev
 
     variables:
         CMAKE_C_COMPILER: clang
@@ -131,7 +147,7 @@ build:clang:
     stage: test
 
     before_script:
-        - apt-get update && apt-get install -y cmake libboost-test-dev libmagic-dev libsqlite3-dev
+        - apt-get update && apt-get install -y cmake libboost-test-dev libboost-filesystem-dev libmagic-dev libsqlite3-dev
 
     script:
         - cd build/
