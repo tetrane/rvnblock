@@ -20,6 +20,7 @@ find_package(rvnmetadata REQUIRED)
 
 add_library(rvnblock
   src/block_writer.cpp
+  src/block_reader.cpp
 )
 
 target_compile_options(rvnblock PRIVATE -W -Wall -Wextra -Wmissing-include-dirs -Wunknown-pragmas -Wpointer-arith -Wmissing-field-initializers -Wno-multichar -Wreturn-type)
@@ -48,6 +49,7 @@ target_link_libraries(rvnblock
 set(PUBLIC_HEADERS
   include/common.h
   include/block_writer.h
+  include/block_reader.h
 )
 
 set_target_properties(rvnblock PROPERTIES
