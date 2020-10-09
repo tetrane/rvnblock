@@ -76,7 +76,7 @@ install(FILES cmake/rvnblock-config.cmake
   DESTINATION ${CMAKE_INSTALL_DATADIR}/cmake/rvnblock
 )
 
-#add_subdirectory(bin)
+add_subdirectory(bin)
 
 enable_testing()
 #add_subdirectory(test)
