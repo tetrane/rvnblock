@@ -79,4 +79,4 @@ install(FILES cmake/rvnblock-config.cmake
 add_subdirectory(bin)
 
 enable_testing()
-#add_subdirectory(test)
+add_subdirectory(test)
