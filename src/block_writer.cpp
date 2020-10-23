@@ -33,6 +33,13 @@ void create_sqlite_db(Db& db)
 	        "block_id int4 not null"
 	        ") WITHOUT ROWID;",
 	        "Can't create table execution");
+	db.exec("CREATE TABLE instruction_indices("
+	        "block_id INTEGER NOT NULL,"
+	        "instruction_id INTEGER NOT NULL,"
+	        "instruction_index INTEGER NOT NULL,"
+	        "PRIMARY KEY (block_id, instruction_id)"
+	        ") WITHOUT ROWID;",
+	        "Can't create table instruction_indices");
 
 	db.exec("pragma synchronous=off", "Pragma error");
 	db.exec("pragma count_changes=off", "Pragma error");
@@ -59,6 +66,7 @@ void reven::block::Writer::reset_last_block(ExecutedBlock block, unsigned int* d
 	last_block_ = block;
 	last_id_ = 0;
 	last_hash_.clear();
+	last_block_instruction_indices_.clear();
 
 	last_hash_.insert(last_hash_.end(), digest, digest + DIGEST_SIZE);
 }
@@ -66,7 +74,7 @@ void reven::block::Writer::reset_last_block(ExecutedBlock block, unsigned int* d
 void Writer::insert_last_block()
 {
 	// check with all previously inserted blocks
-	auto itbool = block_map_.insert({last_hash_, MappedBlock{0, last_block_}});
+	auto itbool = block_map_.insert({last_hash_, MappedBlock{0, 0, last_block_}});
 	auto& value = itbool.first->second;
 	if (itbool.second) {
 		// Is a new block
@@ -80,6 +88,11 @@ void Writer::insert_last_block()
 			throw std::runtime_error("Collision between blocks");
 		}
 		last_id_ = value.id;
+	}
+
+	if (value.executed_instructions < last_block_instruction_indices_.size()) {
+		insert_executed_instructions_db(last_block_instruction_indices_, value.executed_instructions);
+		value.executed_instructions = last_block_instruction_indices_.size();
 	}
 }
 
@@ -95,6 +108,22 @@ std::int64_t Writer::insert_block_db(const ExecutedBlock& block, Span instructio
 	last_block_stmt_.reset();
 
 	return db_.last_insert_rowid();
+}
+
+void Writer::insert_executed_instructions_db(const std::vector<uint32_t>& block_instruction_indices,
+                                             uint32_t already_inserted_instructions)
+{
+	for (std::uint32_t instruction_id = already_inserted_instructions;
+	     instruction_id < block_instruction_indices.size(); ++instruction_id) {
+		const auto instruction_index = block_instruction_indices[instruction_id];
+
+		instructions_stmt_.bind_arg(1, last_id_, "block_id");
+		instructions_stmt_.bind_arg_cast(2, instruction_id, "instruction_id");
+		instructions_stmt_.bind_arg_cast(3, instruction_index, "index");
+
+		step_transaction(instructions_stmt_);
+		instructions_stmt_.reset();
+	}
 }
 
 void Writer::insert_block_execution(std::uint64_t transition_id)
@@ -130,6 +159,7 @@ Writer::Writer(const char* filename, const char* tool_name,
 	return rdb;
 }()),
     last_block_stmt_(db_, "insert into blocks values (?, ?, ?, ?);"),
+    instructions_stmt_(db_, "INSERT INTO instruction_indices VALUES (?, ?, ?);"),
     block_execution_stmt_(db_, "insert into execution values (?, ?);")
 {
 	// insert interrupt block
@@ -146,7 +176,7 @@ Writer::Writer(const char* filename, const char* tool_name,
 	hash.insert(hash.end(), digest, digest + DIGEST_SIZE);
 
 	auto block_id = insert_block_db(block, interrupt_data());
-	block_map_.insert({hash, MappedBlock{block_id, block}});
+	block_map_.insert({hash, MappedBlock{block_id, 0, block}});
 }
 
 Writer::~Writer()
@@ -186,6 +216,18 @@ void Writer::add_block(uint64_t current_transition, ExecutedBlock block, Span in
 	}
 
 	reset_last_block(block, digest, instruction_data);
+}
+
+void Writer::add_block_instruction(uint64_t rip)
+{
+	if (last_hash_.size() != DIGEST_SIZE) {
+		throw std::logic_error("Call to add_block_instruction before any call to add_block");
+	}
+	std::uint32_t index = rip - last_block_.pc;
+	if (index == 0) {
+		return;
+	}
+	last_block_instruction_indices_.push_back(index);
 }
 
 void Writer::add_interrupt(uint64_t current_transition)
