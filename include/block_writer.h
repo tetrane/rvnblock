@@ -11,16 +11,6 @@
 
 namespace reven {
 namespace block {
-//! Helper struct to group a pointer and its size together
-//!
-//! C++20: std::span
-//! lifetime(Span) < lifetime(data)
-struct Span {
-	//! Size of the data
-	std::size_t size;
-	//! Pointer to the data
-	const std::uint8_t* data;
-};
 
 //! Indicates which block was executed, as defined by its pc, instruction count and mode
 struct ExecutedBlock {
