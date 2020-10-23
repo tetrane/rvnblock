@@ -27,7 +27,11 @@ Reader::Reader(sqlite::ResourceDatabase db) :
                       ";"),
     stmt_block_(db_, "SELECT pc, instruction_data, instruction_count, mode "
                      "FROM blocks WHERE rowid = ?"
-                     ";")
+                     ";"),
+    stmt_block_inst_(db_, "SELECT instruction_index "
+                          "FROM instruction_indices WHERE block_id = ? "
+                          "ORDER BY instruction_id ASC"
+                          ";")
 {
 	const auto md = metadata::Metadata::from_raw_metadata(db_.metadata());
 	if (md.type() != metadata::ResourceType::Block) {
@@ -61,10 +65,34 @@ const InstructionBlock& Reader::block(BlockHandle handle) const
 {
 	auto itbool = cache_.insert({handle.handle_, {}});
 	if (itbool.second) {
-		itbool.first->second= fetch_from_db(handle);
+		try {
+			itbool.first->second= fetch_from_db(handle);
+		} catch (std::runtime_error&) {
+			cache_.erase(itbool.first);
+			throw;
+		}
 	}
 
 	return itbool.first->second;
+}
+
+BlockInstructions Reader::block_with_instructions(BlockHandle handle,
+                                                  std::vector<std::uint32_t> instruction_indexes) const
+{
+	const auto& db_block = block(handle);
+	if (db_block.instruction_count == 0) {
+		return BlockInstructions(db_block, {});
+	}
+
+	stmt_block_inst_.reset();
+	stmt_block_inst_.bind_arg(1, handle.handle_, "rowid");
+	instruction_indexes.clear();
+	instruction_indexes.reserve(db_block.instruction_count);
+	while (stmt_block_inst_.step() == sqlite::Statement::StepResult::Row) {
+		std::uint32_t instruction_index = stmt_block_inst_.column_u32(0);
+		instruction_indexes.push_back(instruction_index);
+	}
+	return BlockInstructions(db_block, std::move(instruction_indexes));
 }
 
 std::experimental::optional<BlockExecutionEvent> Reader::event_at(uint64_t transition_id) const
