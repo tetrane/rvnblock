@@ -41,6 +41,8 @@ int main(int argc, char* argv[]) {
 
 		std::cout << "Execution trace" << std::endl;
 
+		std::vector<std::uint32_t> instruction_indexes;
+
 		for (const auto& event : reader.query_events()) {
 			const auto& block = reader.block(event.block_handle);
 			const bool instruction = event.has_instructions();
@@ -52,6 +54,18 @@ int main(int argc, char* argv[]) {
 				          << " instruction_count=" << std::dec << block.instruction_count
 				          << " partial=" << std::boolalpha << partial
 				          << "\n";
+				if (partial) {
+					auto instructions = reader.block_with_instructions(event.block_handle, std::move(instruction_indexes));
+					for (std::uint32_t i = 0; i < event.execution_count(); ++i) {
+						auto instruction = instructions.instruction(i);
+						if (instruction) {
+							std::cout << "\trip=0x" << std::hex << instruction->pc
+							          << " instruction bytecount= " << std::dec << instruction->data.size
+							          << "\n";
+						}
+					}
+					instruction_indexes = std::move(instructions).take_instruction_indexes();
+				}
 			} else {
 				std::cout << std::dec << "[" << event.begin_transition_id << "-" << event.end_transition_id << "]"
 				          << " non-instruction\n";
