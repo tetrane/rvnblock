@@ -195,7 +195,8 @@ void Writer::add_interrupt(uint64_t current_transition)
 
 void Writer::finalize_execution(uint64_t last_transition_id)
 {
-	if (last_hash_.size() == DIGEST_SIZE) {
+	if (last_hash_.size() == DIGEST_SIZE and
+	    last_transition_id != last_transition_id_) {
 		insert_last_block();
 		insert_block_execution(last_transition_id);
 	}
