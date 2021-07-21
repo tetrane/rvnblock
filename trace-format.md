@@ -18,7 +18,7 @@ the execution table when non-instructions such  as interrupts and faults are exe
 -  "pc int8 not null," -- The address of the first instruction executed in the block
 - "instruction_data blob not null," -- A blob of the bytes of all the instructions in the block
 - "instruction_count int2 not null," -- The number of instructions in the block
-- "mode int1 not null" -- The execution mode (64 or 32 bits, x86 only at the moment).
+- "mode int1 not null" -- The execution mode (64, 32 bits or 16 bits, x86 only at the moment).
   Values can be found in the `ExecutionMode` enum in `block_writer.h`.
 
 ## Execution
