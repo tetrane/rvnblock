@@ -198,9 +198,9 @@ Writer::Writer(const char* filename, const char* tool_name,
 	create_sqlite_db(rdb);
 	return rdb;
 }()),
-    last_block_stmt_(db_, "insert into blocks values (?, ?, ?, ?);"),
+    last_block_stmt_(db_, "INSERT INTO blocks VALUES (?, ?, ?, ?);"),
     instructions_stmt_(db_, "INSERT INTO instruction_indices VALUES (?, ?, ?);"),
-    block_execution_stmt_(db_, "insert into execution values (?, ?);"),
+    block_execution_stmt_(db_, "INSERT INTO execution VALUES (?, ?);"),
     interrupt_stmt_(db_, "INSERT INTO interrupts VALUES (?, ?, ?, ?, ?, ?);")
 {
 	// insert interrupt block
