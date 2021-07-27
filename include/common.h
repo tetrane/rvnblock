@@ -18,9 +18,9 @@ enum class ExecutionMode : std::uint8_t {
 //! lifetime(Span) < lifetime(data)
 struct Span {
 	//! Size of the data
-	std::size_t size;
+	std::size_t size = 0;
 	//! Pointer to the data
-	const std::uint8_t* data;
+	const std::uint8_t* data = nullptr;
 };
 
 constexpr const char* format_version = "1.0.0";
