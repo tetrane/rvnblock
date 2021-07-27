@@ -32,7 +32,10 @@ Reader::Reader(sqlite::ResourceDatabase db) :
     stmt_block_inst_(db_, "SELECT instruction_index "
                           "FROM instruction_indices WHERE block_id = ? "
                           "ORDER BY instruction_id ASC"
-                          ";")
+                          ";"),
+    stmt_interrupt_at_(db_, "SELECT pc, mode, number, is_hw, related_instruction_block_id "
+                            "FROM interrupts WHERE transition_id = ? "
+                            ";")
 {
 	const auto md = metadata::Metadata::from_raw_metadata(db_.metadata());
 	if (md.type() != metadata::ResourceType::Block) {
@@ -117,6 +120,66 @@ std::experimental::optional<BlockExecutionEvent> Reader::event_at(uint64_t trans
 	} // else block_begin remains at 0;
 
 	return BlockExecutionEvent{begin_transition_id, end_transition_id, BlockHandle{block_id}};
+}
+
+std::experimental::optional<Interrupt> Reader::interrupt_at(std::uint64_t transition_id) const
+{
+	stmt_interrupt_at_.reset();
+	stmt_interrupt_at_.bind_arg_throw(1, transition_id, "transition_id");
+	if (stmt_interrupt_at_.step() == sqlite::Statement::StepResult::Done) {
+		return {};
+	}
+
+	std::uint64_t pc = stmt_interrupt_at_.column_u64(0);
+	ExecutionMode mode = static_cast<ExecutionMode>(stmt_interrupt_at_.column_i32(1));
+	std::int32_t number = stmt_interrupt_at_.column_i32(2);
+	bool is_hw = stmt_interrupt_at_.column_i32(3) != 0;
+	BlockHandle block_handle = BlockHandle{ stmt_interrupt_at_.column_i32(4) };
+	return Interrupt(pc, mode, number, is_hw, block_handle);
+}
+
+std::experimental::optional<Span> Reader::related_instruction_data(const Interrupt& interrupt) const
+{
+	if (not interrupt.has_related_instruction()) {
+		return {};
+	}
+
+	auto& db_block = block(interrupt.handle_);
+
+	std::uint64_t interrupt_offset = interrupt.pc - db_block.first_pc;
+
+	std::uint64_t begin = 0;
+
+	stmt_block_inst_.reset();
+	stmt_block_inst_.bind_arg(1, interrupt.handle_.handle_, "rowid");
+	while (stmt_block_inst_.step() == sqlite::Statement::StepResult::Row) {
+		std::uint32_t end = stmt_block_inst_.column_u32(0);
+
+		if (begin == interrupt_offset) {
+			std::size_t size = end - begin;
+			auto* data = db_block.instruction_data.data() + begin;
+			return Span{size, data};
+		}
+
+		begin = end;
+	}
+
+	// At this point we are at the last possible offset
+	if (begin == interrupt_offset) {
+		std::uint64_t end = db_block.instruction_data.size();
+		std::size_t size = end - begin;
+		// If we never executed the entire block, we may mistakenly take bytes from instructions further in this block.
+		// Without a disassembler, we have absolutely no way of distinguishing where to end the instruction,
+		// so (like in the existing context-based transition implementation), we will have to take more bytes.
+		// For performance reasons, we limit this to the maximal number of bytes a x86 instruction can contain: 15.
+		if (size > 15) {
+			size = 15;
+		}
+		auto* data = db_block.instruction_data.data() + begin;
+		return Span{size, data};
+	}
+
+	return {};
 }
 
 struct EventQueryState {
