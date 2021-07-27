@@ -2,7 +2,7 @@ Described in this file is the version 1.0 of the sqlite block trace format.
 
 # Format overview
 
-Two tables in a sqlite file created using rvnmetadata (and the correct format type).
+Several tables in a sqlite file created using rvnmetadata (and the correct format type).
 
 The two tables are described in the following sections.
 
@@ -39,3 +39,23 @@ This table is "WITHOUT_ROWID" to disable the automatic rowid column added by sql
 an explicit index on `transition_id`, which benefits the size of the database and the speed of access.
 
 It is OK to do so, because two execution events at the same transition is always a bug.
+
+
+## Instruction indices
+
+The list of the offsets (indices) of the instructions in the block.
+- The offset of the first instruction, which is always 0, is not saved.
+- The the size of the last instruction can be computed from the last offset and the size of the entire block, and so is
+  not saved (furthermore, it would be difficult to obtain).
+
+NOTE: due to the fact that blocks are not always executed fully, the last instruction known to this table may not be
+the last instruction in the block. For the purpose of rvnblock this is not a problem, because the instructions past
+this one are never executed in the trace. Furthermore, the last instruction known to this table may contain bytes
+from the unexecuted instructions. This means that downstream clients are expected to use a disassembler to find
+the actual instruction in this case (like it is the case currently in the `reven_backend` where we always read 15 bytes
+for the data of an instruction).
+
+### Fields
+
+- "block_id INTEGER NOT NULL," -- The rowid of the block that contains the instruction
+- "instruction_index INTEGER NOT NULL," -- The offset of the instruction relative to the first instruction of the block
