@@ -6,6 +6,7 @@
 
 namespace reven {
 namespace block {
+namespace reader {
 
 Reader::Reader(const char* filename) :
     Reader(sqlite::ResourceDatabase::open(filename, true))
@@ -169,4 +170,4 @@ InstructionBlock Reader::fetch_from_db(BlockHandle handle) const
 	return InstructionBlock{{inst_data_buf, inst_data_buf + inst_data_size}, pc, inst_count, mode};
 }
 
-}} // namespace reven::block
+}}} // namespace reven::block::reader

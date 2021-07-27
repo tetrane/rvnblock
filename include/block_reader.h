@@ -11,6 +11,8 @@
 
 namespace reven {
 namespace block {
+namespace reader {
+
 //! A block of instructions as stored in the database
 struct InstructionBlock {
 	//! Data of the instructions executed in this block
@@ -29,7 +31,6 @@ struct Instruction {
 	std::uint64_t pc;
 	Span data;
 };
-
 
 //! A block of instruction along with the indexes of its executed instructions.
 //!
@@ -245,4 +246,4 @@ private:
 	mutable sqlite::Statement stmt_block_inst_;
 };
 
-}} // namespace reven::block
+}}} // namespace reven::block::reader

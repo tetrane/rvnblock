@@ -11,6 +11,7 @@
 
 namespace reven {
 namespace block {
+namespace writer {
 
 //! Indicates which block was executed, as defined by its pc, instruction count and mode
 struct ExecutedBlock {
@@ -144,4 +145,4 @@ private:
 	reven::sqlite::Statement::StepResult step_transaction(reven::sqlite::Statement& stmt);
 };
 
-}} // namespace reven::block
+}}} // namespace reven::block::writer

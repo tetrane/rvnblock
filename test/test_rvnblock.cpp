@@ -8,6 +8,9 @@
 #include <block_reader.h>
 
 using namespace reven::block;
+using Writer = writer::Writer;
+using ExecutedBlock = writer::ExecutedBlock;
+using Reader = reader::Reader;
 
 BOOST_AUTO_TEST_CASE(test_reader_base)
 {

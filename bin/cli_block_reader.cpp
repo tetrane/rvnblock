@@ -4,6 +4,7 @@
 #include <experimental/string_view>
 
 using namespace reven::block;
+using namespace reven::block::reader;
 
 void show_help_and_exit(const char* prog_name) {
 	std::cerr << "Usage:\n";

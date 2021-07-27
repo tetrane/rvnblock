@@ -6,6 +6,7 @@
 
 namespace reven {
 namespace block {
+namespace writer {
 
 namespace {
 // see boost::uuids::sha1::digest_type
@@ -58,7 +59,7 @@ Span interrupt_data() {
 } // anonymous namespace
 
 
-void reven::block::Writer::reset_last_block(ExecutedBlock block, unsigned int* digest, reven::block::Span instruction_data)
+void Writer::reset_last_block(ExecutedBlock block, unsigned int* digest, reven::block::Span instruction_data)
 {
 	last_instruction_data_.clear();
 	last_instruction_data_.insert(last_instruction_data_.end(),instruction_data.data,
@@ -255,4 +256,4 @@ sqlite::ResourceDatabase Writer::take() &&
 	return std::move(db_);
 }
 
-}} // namespace reven::block
+}}} // namespace reven::block::writer
