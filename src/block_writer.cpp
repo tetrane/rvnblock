@@ -81,7 +81,9 @@ void Writer::insert_last_block()
 	if (itbool.second) {
 		// Is a new block
 		last_id_ = insert_block_db(last_block_, Span{last_instruction_data_.size(), last_instruction_data_.data()});
-
+		if (last_id_ == 0) {
+			throw std::logic_error("last_id_ == 0 after insert_block_db_");
+		}
 
 		value.id = last_id_;
 	} else {
@@ -90,6 +92,10 @@ void Writer::insert_last_block()
 			throw std::runtime_error("Collision between blocks");
 		}
 		last_id_ = value.id;
+
+		if (last_id_ == 0) {
+			throw std::logic_error("last_id_ == 0 after getting existing block");
+		}
 	}
 
 	if (value.executed_instructions < last_block_instruction_indices_.size()) {
@@ -119,6 +125,10 @@ void Writer::insert_executed_instructions_db(const std::vector<uint32_t>& block_
 	     instruction_id < block_instruction_indices.size(); ++instruction_id) {
 		const auto instruction_index = block_instruction_indices[instruction_id];
 
+		if (last_id_ == 0) {
+			throw std::logic_error("insert_executed_instructions: attempting to insert with last_id_ = 0");
+		}
+
 		instructions_stmt_.bind_arg(1, last_id_, "block_id");
 		instructions_stmt_.bind_arg_cast(2, instruction_id, "instruction_id");
 		instructions_stmt_.bind_arg_cast(3, instruction_index, "index");
@@ -130,6 +140,9 @@ void Writer::insert_executed_instructions_db(const std::vector<uint32_t>& block_
 
 void Writer::insert_block_execution(std::uint64_t transition_id)
 {
+	if (last_id_ == 0) {
+		throw std::logic_error("insert_block_execution: attempting to insert with last_id_ == 0");
+	}
 	block_execution_stmt_.bind_arg_throw(1, transition_id, "transition_id");
 	block_execution_stmt_.bind_arg(2, last_id_, "block_id");
 	step_transaction(block_execution_stmt_);
