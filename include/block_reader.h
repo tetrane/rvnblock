@@ -55,11 +55,19 @@ public:
 		if (instruction_index != 0) {
 			begin = instruction_indexes_[instruction_index - 1];
 		}
+
 		std::uint32_t end = block().instruction_data.size();
 		if (instruction_index < instruction_indexes_.size()) {
 			end = instruction_indexes_[instruction_index];
 		}
-		std::size_t size = end - begin;
+
+		// If we never executed the entire block, we may mistakenly take bytes from instructions further in this
+		// block.
+		// Without a disassembler, we have absolutely no way of distinguishing where to end the instruction,
+		// so (like in the existing context-based transition implementation), we will have to take more bytes.
+		// For performance reasons, we limit this to the maximal number of bytes a x86 instruction can contain: 15.
+		std::uint32_t size = std::min(end - begin, std::uint32_t(15));
+
 		return Instruction{block().first_pc + begin, {size, block().instruction_data.data() + begin}};
 	}
 
