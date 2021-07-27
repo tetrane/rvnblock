@@ -41,6 +41,15 @@ void create_sqlite_db(Db& db)
 	        "PRIMARY KEY (block_id, instruction_id)"
 	        ") WITHOUT ROWID;",
 	        "Can't create table instruction_indices");
+	db.exec("CREATE TABLE interrupts("
+	        "transition_id int8 PRIMARY KEY NOT NULL,"
+			"pc int8 NOT NULL,"
+			"mode int1 NOT NULL,"
+			"number INTEGER NOT NULL,"
+			"is_hw BOOL NOT NULL,"
+			"related_instruction_block_id INTEGER NOT NULL"
+	        ") WITHOUT ROWID;",
+			"Can't create table interrupts");
 
 	db.exec("pragma synchronous=off", "Pragma error");
 	db.exec("pragma count_changes=off", "Pragma error");
@@ -150,6 +159,22 @@ void Writer::insert_block_execution(std::uint64_t transition_id)
 	last_transition_id_ = transition_id;
 }
 
+void Writer::insert_interrupt(uint64_t transition_id, Interrupt interrupt)
+{
+	interrupt_stmt_.bind_arg_throw(1, transition_id, "transition_id");
+	interrupt_stmt_.bind_arg_cast(2, interrupt.pc, "pc");
+	interrupt_stmt_.bind_arg(3, static_cast<std::uint8_t>(interrupt.mode), "mode");
+	interrupt_stmt_.bind_arg_cast(4, interrupt.number, "number");
+	interrupt_stmt_.bind_arg(5, interrupt.is_hw, "is_hw");
+	if (interrupt.has_related_instruction) {
+		interrupt_stmt_.bind_arg(6, last_id_, "related_instruction_block_id");
+	} else {
+		interrupt_stmt_.bind_arg(6, 0, "related_instruction_block_id");
+	}
+	step_transaction(interrupt_stmt_);
+	interrupt_stmt_.reset();
+}
+
 Stmt::StepResult Writer::step_transaction(sqlite::Statement& stmt)
 {
 	if (transaction_items_ == 0) {
@@ -175,7 +200,8 @@ Writer::Writer(const char* filename, const char* tool_name,
 }()),
     last_block_stmt_(db_, "insert into blocks values (?, ?, ?, ?);"),
     instructions_stmt_(db_, "INSERT INTO instruction_indices VALUES (?, ?, ?);"),
-    block_execution_stmt_(db_, "insert into execution values (?, ?);")
+    block_execution_stmt_(db_, "insert into execution values (?, ?);"),
+    interrupt_stmt_(db_, "INSERT INTO interrupts VALUES (?, ?, ?, ?, ?, ?);")
 {
 	// insert interrupt block
 	// see boost::uuids::sha1::digest_type
@@ -207,6 +233,12 @@ Writer::~Writer()
 
 void Writer::add_block(uint64_t current_transition, ExecutedBlock block, Span instruction_data)
 {
+	add_block_inner(current_transition, block, instruction_data, false);
+}
+
+void Writer::add_block_inner(uint64_t current_transition, ExecutedBlock block, Span instruction_data,
+                             bool force_last_block_insertion)
+{
 	// see boost::uuids::sha1::digest_type
 	unsigned int digest[DIGEST_SIZE];
 
@@ -228,6 +260,8 @@ void Writer::add_block(uint64_t current_transition, ExecutedBlock block, Span in
 	if (current_transition != last_transition_id_) {
 		insert_last_block();
 		insert_block_execution(current_transition);
+	} else if (force_last_block_insertion) {
+		insert_last_block();
 	}
 
 	reset_last_block(block, digest, instruction_data);
@@ -245,9 +279,10 @@ void Writer::add_block_instruction(uint64_t rip)
 	last_block_instruction_indices_.push_back(index);
 }
 
-void Writer::add_interrupt(uint64_t current_transition)
+void Writer::add_interrupt(uint64_t current_transition, Interrupt interrupt)
 {
-	add_block(current_transition, interrupt_block(), interrupt_data());
+	add_block_inner(current_transition, interrupt_block(), interrupt_data(), true);
+	insert_interrupt(current_transition, interrupt);
 }
 
 void Writer::finalize_execution(uint64_t last_transition_id)

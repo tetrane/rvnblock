@@ -33,6 +33,24 @@ struct ExecutedBlock {
 	}
 };
 
+//! The data of a single non-instruction (interrupt, page fault, ...) that was executed, as defined by its pc, mode,
+//! instruction number, etc.
+struct Interrupt {
+	//! Address of the instruction at which the interrupt occurred.
+	std::uint64_t pc = 0;
+	//! Execution mode of the instruction at which the interrupt occurred.
+	ExecutionMode mode = ExecutionMode::x86_64_bits;
+
+	//! Architecture-dependent interrupt number. For x86, the index in the interrupt table.
+	std::uint32_t number = 0;
+
+	//! Whether the interrupt is a hardware or software interrupt.
+	bool is_hw = false;
+
+	//! Whether the interrupt occurred "while" executing an instruction or after.
+	bool has_related_instruction = false;
+};
+
 //! Write the trace of executed blocks as a versioned database in the format described in
 //!   [trace-format.md](../trace-format.md).
 class Writer {
@@ -73,7 +91,7 @@ public:
 	//! Report the execution of a non-instruction to the database
 	//!
 	//! - current_transition: id of the transition corresponding to the non-instruction
-	void add_interrupt(std::uint64_t current_transition);
+	void add_interrupt(std::uint64_t current_transition, Interrupt interrupt);
 
 	//! Indicate that the last basic block finished executing.
 	//!
@@ -134,6 +152,7 @@ private:
 	reven::sqlite::Statement last_block_stmt_;
 	reven::sqlite::Statement instructions_stmt_;
 	reven::sqlite::Statement block_execution_stmt_;
+	reven::sqlite::Statement interrupt_stmt_;
 
 	void reset_last_block(ExecutedBlock block, unsigned int* digest, Span instruction_data);
 	void insert_last_block();
@@ -141,6 +160,12 @@ private:
 	void insert_executed_instructions_db(const std::vector<std::uint32_t>& block_instruction_indices,
 	                                     std::uint32_t already_inserted_instructions);
 	void insert_block_execution(std::uint64_t transition_id);
+
+	void insert_interrupt(std::uint64_t current_transition, Interrupt interrupt);
+
+	void add_block_inner(std::uint64_t current_transition, ExecutedBlock block, Span instruction_data,
+	                     bool force_last_block_insertion);
+
 	// use for transaction-aware statement steps
 	reven::sqlite::Statement::StepResult step_transaction(reven::sqlite::Statement& stmt);
 };
