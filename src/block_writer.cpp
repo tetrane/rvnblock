@@ -65,7 +65,8 @@ void Writer::reset_last_block(ExecutedBlock block, unsigned int* digest, reven::
 	last_instruction_data_.insert(last_instruction_data_.end(),instruction_data.data,
 	                              instruction_data.data + instruction_data.size);
 	last_block_ = block;
-	last_id_ = 0;
+	// A previous version of this function would set last_id_ = 0; This is probably not what we want because
+	// the value of the last inserted block is reused (e.g. when adding interrupts), and it being 0 is an error anyway.
 	last_hash_.clear();
 	last_block_instruction_indices_.clear();
 
