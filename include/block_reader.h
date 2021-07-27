@@ -23,6 +23,63 @@ struct InstructionBlock {
 	ExecutionMode mode;
 };
 
+
+//! The data and pc of an instruction.
+struct Instruction {
+	std::uint64_t pc;
+	Span data;
+};
+
+
+//! A block of instruction along with the indexes of its executed instructions.
+//!
+//! Provides methods to access the individual instructions of the block.
+class BlockInstructions {
+public:
+	BlockInstructions(const InstructionBlock& block, std::vector<std::uint32_t> instruction_indexes) :
+	    block_(&block),
+	    instruction_indexes_(std::move(instruction_indexes))
+	{}
+
+	//! The underlying block
+	const InstructionBlock& block() const { return *block_; }
+
+	//! Get the indexth instruction from the block, or nullopt if the index is greater than or equal to the
+	//! instruction count.
+	std::experimental::optional<Instruction> instruction(std::uint32_t instruction_index) const {
+		if (instruction_index >= instruction_count()) {
+			return {};
+		}
+		std::uint32_t begin = 0;
+		if (instruction_index != 0) {
+			begin = instruction_indexes_[instruction_index - 1];
+		}
+		std::uint32_t end = block().instruction_data.size();
+		if (instruction_index < instruction_indexes_.size()) {
+			end = instruction_indexes_[instruction_index];
+		}
+		std::size_t size = end - begin;
+		return Instruction{block().first_pc + begin, {size, block().instruction_data.data() + begin}};
+	}
+
+	//! The number of instructions executed at least once in this block.
+	//!
+	//! This can be different from the InstructionBlock::instruction_count field if the block was never fully executed.
+	std::uint32_t instruction_count() const {
+		return block().instruction_count == 0 ? 0 : instruction_indexes_.size() + 1;
+	}
+
+	//! Performance helping method that allows to shred this BlockInstructions to recover its underlying vector.
+	//!
+	//! This allows reusing vectors of BlockInstructions rather than allocating new ones for each new instance.
+	std::vector<std::uint32_t> take_instruction_indexes() && {
+		return std::move(this->instruction_indexes_);
+	}
+private:
+	const InstructionBlock* block_;
+	std::vector<std::uint32_t> instruction_indexes_;
+};
+
 //! An opaque handle to a block of instructions in the database
 class BlockHandle {
 public:
@@ -107,6 +164,20 @@ public:
 	//!        This can happen if a handle obtained from a different BlockReader is passed to this function.
 	const InstructionBlock& block(BlockHandle handle) const;
 
+	//! Attempt to retrieve a block of instructions with the indexes of instructions from its handle.
+	//!
+	//! The handle can be obtained from the BlockExecutionEvent returned by event_at and query_events.
+	//!
+	//! The reader uses a block cache, so requesting twice the same block will not read from the database
+	//!
+	//! The instruction_indexes parameter is an arbitrary vector whose backing storage will be reused in the constructed
+	//! BlockInstructions. This spares an allocation if the vector already has enough capacity.
+	//!
+	//! Throws RuntimeError if the block corresponding to the handle is not in the database.
+	//!        This can happen if a handle obtained from a different BlockReader is passed to this function.
+	BlockInstructions block_with_instructions(BlockHandle handle,
+	                                          std::vector<std::uint32_t> instruction_indexes) const;
+
 	//! Obtain the execution event that contains the transition whose id is specified
 	//!
 	//! Return nullopt if no such event exists, e.g. if the transition_id is greater than transition_count.
@@ -147,6 +218,9 @@ public:
 	TransitionQuery query_non_instructions() const;
 
 	//! Clear the cache, reclaiming the memory allocated by the cache.
+	//!
+	//! Warning: calling this method removes all block from the cache, invalidating any values returned by block or
+	//! block_with_instructions.
 	void clear_cache() const {
 		cache_ = CacheMap{};
 	}
@@ -168,6 +242,7 @@ private:
 	mutable sqlite::Statement stmt_after_;
 	mutable sqlite::Statement stmt_before_;
 	mutable sqlite::Statement stmt_block_;
+	mutable sqlite::Statement stmt_block_inst_;
 };
 
 }} // namespace reven::block

@@ -11,16 +11,6 @@
 
 namespace reven {
 namespace block {
-//! Helper struct to group a pointer and its size together
-//!
-//! C++20: std::span
-//! lifetime(Span) < lifetime(data)
-struct Span {
-	//! Size of the data
-	std::size_t size;
-	//! Pointer to the data
-	const std::uint8_t* data;
-};
 
 //! Indicates which block was executed, as defined by its pc, instruction count and mode
 struct ExecutedBlock {
@@ -63,6 +53,22 @@ public:
 	//! - instruction_data: data of the executed block
 	void add_block(std::uint64_t current_transition, ExecutedBlock block, Span instruction_data);
 
+	//! Report the execution of an instruction at the specified rip in the currently executing block.
+	//!
+	//! This allows to compute the offsets of each instruction inside the block.
+	//!
+	//! # Example:
+	//!
+	//! ```cpp
+	//! // add the currently executed block
+	//! add_block(current, block, instruction_data);
+	//! for (const auto& instruction : executed_block) {
+	//! 	// add each instruction of the block
+	//! 	add_block_instruction(instruction.pc);
+	//! }
+	//! ```
+	void add_block_instruction(std::uint64_t rip);
+
 	//! Report the execution of a non-instruction to the database
 	//!
 	//! - current_transition: id of the transition corresponding to the non-instruction
@@ -96,12 +102,14 @@ private:
 	BlockId last_id_ = 0;
 	std::vector<uint8_t> last_instruction_data_;
 	std::uint64_t last_transition_id_ = 0;
+	std::vector<uint32_t> last_block_instruction_indices_;
 
-	// if 0, no transaction is running, otherwise transaction has running for this number of steps
+	// if 0, no transaction is running, otherwise transaction has been running for this number of steps
 	std::uint32_t transaction_items_ = 0;
 
 	struct MappedBlock {
 		BlockId id;
+		std::uint32_t executed_instructions;
 		ExecutedBlock block;
 	};
 
@@ -123,11 +131,14 @@ private:
 
 	reven::sqlite::ResourceDatabase db_;
 	reven::sqlite::Statement last_block_stmt_;
+	reven::sqlite::Statement instructions_stmt_;
 	reven::sqlite::Statement block_execution_stmt_;
 
 	void reset_last_block(ExecutedBlock block, unsigned int* digest, Span instruction_data);
 	void insert_last_block();
 	std::int64_t insert_block_db(const ExecutedBlock& block, Span instruction_data);
+	void insert_executed_instructions_db(const std::vector<std::uint32_t>& block_instruction_indices,
+	                                     std::uint32_t already_inserted_instructions);
 	void insert_block_execution(std::uint64_t transition_id);
 	// use for transaction-aware statement steps
 	reven::sqlite::Statement::StepResult step_transaction(reven::sqlite::Statement& stmt);
