@@ -59,3 +59,16 @@ for the data of an instruction).
 
 - "block_id INTEGER NOT NULL," -- The rowid of the block that contains the instruction
 - "instruction_index INTEGER NOT NULL," -- The offset of the instruction relative to the first instruction of the block
+
+## Interrupts
+
+Contains interrupt data
+
+### Fields
+
+- "transition_id int8 PRIMARY KEY NOT NULL,": transition_id of the interrupt
+- "pc int8 NOT NULL,": pc right before the interrupt
+- "mode int1 NOT NULL,": mode right before the interrupt
+- "number INTEGER NOT NULL,": interrupt number. In x86, the index in the interrupt table.
+- "is_hw BOOL NOT NULL,": whether the interrupt is hardware or software
+- "related_instruction_block_id INTEGER NOT NULL": If there is a related instruction, its block id. Otherwise, 0.

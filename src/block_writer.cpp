@@ -6,6 +6,7 @@
 
 namespace reven {
 namespace block {
+namespace writer {
 
 namespace {
 // see boost::uuids::sha1::digest_type
@@ -40,6 +41,15 @@ void create_sqlite_db(Db& db)
 	        "PRIMARY KEY (block_id, instruction_id)"
 	        ") WITHOUT ROWID;",
 	        "Can't create table instruction_indices");
+	db.exec("CREATE TABLE interrupts("
+	        "transition_id int8 PRIMARY KEY NOT NULL,"
+			"pc int8 NOT NULL,"
+			"mode int1 NOT NULL,"
+			"number INTEGER NOT NULL,"
+			"is_hw BOOL NOT NULL,"
+			"related_instruction_block_id INTEGER NOT NULL"
+	        ") WITHOUT ROWID;",
+			"Can't create table interrupts");
 
 	db.exec("pragma synchronous=off", "Pragma error");
 	db.exec("pragma count_changes=off", "Pragma error");
@@ -58,13 +68,14 @@ Span interrupt_data() {
 } // anonymous namespace
 
 
-void reven::block::Writer::reset_last_block(ExecutedBlock block, unsigned int* digest, reven::block::Span instruction_data)
+void Writer::reset_last_block(ExecutedBlock block, unsigned int* digest, reven::block::Span instruction_data)
 {
 	last_instruction_data_.clear();
 	last_instruction_data_.insert(last_instruction_data_.end(),instruction_data.data,
 	                              instruction_data.data + instruction_data.size);
 	last_block_ = block;
-	last_id_ = 0;
+	// A previous version of this function would set last_id_ = 0; This is probably not what we want because
+	// the value of the last inserted block is reused (e.g. when adding interrupts), and it being 0 is an error anyway.
 	last_hash_.clear();
 	last_block_instruction_indices_.clear();
 
@@ -79,7 +90,9 @@ void Writer::insert_last_block()
 	if (itbool.second) {
 		// Is a new block
 		last_id_ = insert_block_db(last_block_, Span{last_instruction_data_.size(), last_instruction_data_.data()});
-
+		if (last_id_ == 0) {
+			throw std::logic_error("last_id_ == 0 after insert_block_db_");
+		}
 
 		value.id = last_id_;
 	} else {
@@ -88,6 +101,10 @@ void Writer::insert_last_block()
 			throw std::runtime_error("Collision between blocks");
 		}
 		last_id_ = value.id;
+
+		if (last_id_ == 0) {
+			throw std::logic_error("last_id_ == 0 after getting existing block");
+		}
 	}
 
 	if (value.executed_instructions < last_block_instruction_indices_.size()) {
@@ -117,6 +134,10 @@ void Writer::insert_executed_instructions_db(const std::vector<uint32_t>& block_
 	     instruction_id < block_instruction_indices.size(); ++instruction_id) {
 		const auto instruction_index = block_instruction_indices[instruction_id];
 
+		if (last_id_ == 0) {
+			throw std::logic_error("insert_executed_instructions: attempting to insert with last_id_ = 0");
+		}
+
 		instructions_stmt_.bind_arg(1, last_id_, "block_id");
 		instructions_stmt_.bind_arg_cast(2, instruction_id, "instruction_id");
 		instructions_stmt_.bind_arg_cast(3, instruction_index, "index");
@@ -128,11 +149,30 @@ void Writer::insert_executed_instructions_db(const std::vector<uint32_t>& block_
 
 void Writer::insert_block_execution(std::uint64_t transition_id)
 {
+	if (last_id_ == 0) {
+		throw std::logic_error("insert_block_execution: attempting to insert with last_id_ == 0");
+	}
 	block_execution_stmt_.bind_arg_throw(1, transition_id, "transition_id");
 	block_execution_stmt_.bind_arg(2, last_id_, "block_id");
 	step_transaction(block_execution_stmt_);
 	block_execution_stmt_.reset();
 	last_transition_id_ = transition_id;
+}
+
+void Writer::insert_interrupt(uint64_t transition_id, Interrupt interrupt)
+{
+	interrupt_stmt_.bind_arg_throw(1, transition_id, "transition_id");
+	interrupt_stmt_.bind_arg_cast(2, interrupt.pc, "pc");
+	interrupt_stmt_.bind_arg(3, static_cast<std::uint8_t>(interrupt.mode), "mode");
+	interrupt_stmt_.bind_arg_cast(4, interrupt.number, "number");
+	interrupt_stmt_.bind_arg(5, interrupt.is_hw, "is_hw");
+	if (interrupt.has_related_instruction) {
+		interrupt_stmt_.bind_arg(6, last_id_, "related_instruction_block_id");
+	} else {
+		interrupt_stmt_.bind_arg(6, 0, "related_instruction_block_id");
+	}
+	step_transaction(interrupt_stmt_);
+	interrupt_stmt_.reset();
 }
 
 Stmt::StepResult Writer::step_transaction(sqlite::Statement& stmt)
@@ -158,9 +198,10 @@ Writer::Writer(const char* filename, const char* tool_name,
 	create_sqlite_db(rdb);
 	return rdb;
 }()),
-    last_block_stmt_(db_, "insert into blocks values (?, ?, ?, ?);"),
+    last_block_stmt_(db_, "INSERT INTO blocks VALUES (?, ?, ?, ?);"),
     instructions_stmt_(db_, "INSERT INTO instruction_indices VALUES (?, ?, ?);"),
-    block_execution_stmt_(db_, "insert into execution values (?, ?);")
+    block_execution_stmt_(db_, "INSERT INTO execution VALUES (?, ?);"),
+    interrupt_stmt_(db_, "INSERT INTO interrupts VALUES (?, ?, ?, ?, ?, ?);")
 {
 	// insert interrupt block
 	// see boost::uuids::sha1::digest_type
@@ -192,6 +233,12 @@ Writer::~Writer()
 
 void Writer::add_block(uint64_t current_transition, ExecutedBlock block, Span instruction_data)
 {
+	add_block_inner(current_transition, block, instruction_data, false);
+}
+
+void Writer::add_block_inner(uint64_t current_transition, ExecutedBlock block, Span instruction_data,
+                             bool force_last_block_insertion)
+{
 	// see boost::uuids::sha1::digest_type
 	unsigned int digest[DIGEST_SIZE];
 
@@ -213,6 +260,8 @@ void Writer::add_block(uint64_t current_transition, ExecutedBlock block, Span in
 	if (current_transition != last_transition_id_) {
 		insert_last_block();
 		insert_block_execution(current_transition);
+	} else if (force_last_block_insertion) {
+		insert_last_block();
 	}
 
 	reset_last_block(block, digest, instruction_data);
@@ -230,9 +279,10 @@ void Writer::add_block_instruction(uint64_t rip)
 	last_block_instruction_indices_.push_back(index);
 }
 
-void Writer::add_interrupt(uint64_t current_transition)
+void Writer::add_interrupt(uint64_t current_transition, Interrupt interrupt)
 {
-	add_block(current_transition, interrupt_block(), interrupt_data());
+	add_block_inner(current_transition, interrupt_block(), interrupt_data(), true);
+	insert_interrupt(current_transition, interrupt);
 }
 
 void Writer::finalize_execution(uint64_t last_transition_id)
@@ -255,4 +305,4 @@ sqlite::ResourceDatabase Writer::take() &&
 	return std::move(db_);
 }
 
-}} // namespace reven::block
+}}} // namespace reven::block::writer

@@ -11,6 +11,8 @@
 
 namespace reven {
 namespace block {
+namespace reader {
+
 //! A block of instructions as stored in the database
 struct InstructionBlock {
 	//! Data of the instructions executed in this block
@@ -29,7 +31,6 @@ struct Instruction {
 	std::uint64_t pc;
 	Span data;
 };
-
 
 //! A block of instruction along with the indexes of its executed instructions.
 //!
@@ -54,11 +55,19 @@ public:
 		if (instruction_index != 0) {
 			begin = instruction_indexes_[instruction_index - 1];
 		}
+
 		std::uint32_t end = block().instruction_data.size();
 		if (instruction_index < instruction_indexes_.size()) {
 			end = instruction_indexes_[instruction_index];
 		}
-		std::size_t size = end - begin;
+
+		// If we never executed the entire block, we may mistakenly take bytes from instructions further in this
+		// block.
+		// Without a disassembler, we have absolutely no way of distinguishing where to end the instruction,
+		// so (like in the existing context-based transition implementation), we will have to take more bytes.
+		// For performance reasons, we limit this to the maximal number of bytes a x86 instruction can contain: 15.
+		std::uint32_t size = std::min(end - begin, std::uint32_t(15));
+
 		return Instruction{block().first_pc + begin, {size, block().instruction_data.data() + begin}};
 	}
 
@@ -137,6 +146,41 @@ struct BlockExecutionEvent {
 	}
 };
 
+//! The data of a single non-instruction (interrupt, page fault, ...) that was executed, as defined by its pc, mode,
+//! instruction number, etc.
+class Interrupt {
+public:
+	//! Address of the instruction at which the interrupt occurred.
+	std::uint64_t pc = 0;
+	//! Execution mode of the instruction at which the interrupt occurred.
+	ExecutionMode mode = ExecutionMode::x86_64_bits;
+
+	//! Architecture-dependent interrupt number. For x86, the index in the interrupt table.
+	std::uint32_t number = 0;
+
+	//! Whether the interrupt is a hardware or software interrupt.
+	bool is_hw = false;
+
+	//! Whether the interrupt occurred "while" executing an instruction or after.
+	bool has_related_instruction() const {
+		return handle_.handle() != 0;
+	}
+
+private:
+	Interrupt(std::uint64_t pc_, ExecutionMode mode_, std::uint32_t number_, bool is_hw_, BlockHandle handle)
+	: pc(pc_)
+	, mode(mode_)
+	, number(number_)
+	, is_hw(is_hw_)
+	, handle_(handle)
+	{}
+
+	// 0 if no actual blockhandle, otherwise the id of the blockhandle of the instruction.
+	BlockHandle handle_;
+
+	friend class Reader;
+};
+
 //! Read a file in the format described in [trace-format.md](../trace-format.md) as the trace of executed blocks.
 class Reader {
 public:
@@ -182,6 +226,17 @@ public:
 	//!
 	//! Return nullopt if no such event exists, e.g. if the transition_id is greater than transition_count.
 	std::experimental::optional<BlockExecutionEvent> event_at(std::uint64_t transition_id) const;
+
+	//! Obtain the Interrupt event that occurs at the transition whose id is specified
+	//!
+	//! Return nullopt if no such event exists, e.g. if the transition is an instruction, or if the transition_id is
+	//! greater than transition_count.
+	std::experimental::optional<Interrupt> interrupt_at(std::uint64_t transition_id) const;
+
+	//! If there is an instruction related to the interrupt, attempts to obtain its data.
+	//!
+	//! If the data is not available or there is no instruction related to this interrupt, returns a nullopt_t.
+	std::experimental::optional<Span> related_instruction_data(const Interrupt& interrupt) const;
 
 	//! Iterate on the execution event in the trace
 	//!
@@ -243,6 +298,7 @@ private:
 	mutable sqlite::Statement stmt_before_;
 	mutable sqlite::Statement stmt_block_;
 	mutable sqlite::Statement stmt_block_inst_;
+	mutable sqlite::Statement stmt_interrupt_at_;
 };
 
-}} // namespace reven::block
+}}} // namespace reven::block::reader

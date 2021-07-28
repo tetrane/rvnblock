@@ -4,6 +4,7 @@
 #include <experimental/string_view>
 
 using namespace reven::block;
+using namespace reven::block::reader;
 
 void show_help_and_exit(const char* prog_name) {
 	std::cerr << "Usage:\n";
@@ -34,7 +35,45 @@ int main(int argc, char* argv[]) {
 		std::cout << "Non-instructions" << std::endl;
 
 		for (auto transition : reader.query_non_instructions()) {
-			std::cout << std::dec << transition << "\n";
+			auto interrupt = reader.interrupt_at(transition);
+			if (not interrupt) {
+				throw std::runtime_error("Inconsistent DB");
+			}
+
+			std::cout << std::dec << transition << " | 0x" <<
+			std::hex << interrupt->pc << " | " <<
+			std::dec << interrupt->number << " | ";
+
+			switch (interrupt->mode) {
+				case ExecutionMode::x86_16_bits:
+					std::cout << "16bits";
+					break;
+				case ExecutionMode::x86_32_bits:
+					std::cout << "32bits";
+					break;
+				case ExecutionMode::x86_64_bits:
+					std::cout << "64bits";
+					break;
+				default:
+					throw std::runtime_error("Unsupported mode");
+			}
+			std::cout << " | ";
+			if (interrupt->is_hw) {
+				std::cout << "hw";
+			} else {
+				std::cout << "sw";
+			}
+
+			if (interrupt->has_related_instruction()) {
+				auto span = reader.related_instruction_data(*interrupt);
+				if (not span) {
+					throw std::runtime_error("Could not find related instruction");
+				}
+				std::cout << " | instruction_size=" << span->size;
+			}
+
+			std::cout << "\n";
+
 		}
 
 		std::cout << "Finished Non-instructions" << std::endl;
