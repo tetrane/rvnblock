@@ -2,7 +2,10 @@
 
 #include <rvnmetadata/metadata.h>
 
-#include <boost/uuid/sha1.hpp>
+// Get the SHA1 implementation from boost details.
+// As of today this is the easiest way of getting a SHA1 implementation without adding a dedicated dependency.
+// Note that sha1.hpp is an implementation detail of Boost's UUID, and so subject to change/removal, etc.
+#include <boost/uuid/detail/sha1.hpp>
 
 namespace reven {
 namespace block {
