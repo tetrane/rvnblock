@@ -233,4 +233,14 @@ InstructionBlock Reader::fetch_from_db(BlockHandle handle) const
 	return InstructionBlock{{inst_data_buf, inst_data_buf + inst_data_size}, pc, inst_count, mode};
 }
 
+metadata::Version Reader::resource_version()
+{
+	return metadata::Version::from_string(format_version);
+}
+
+metadata::ResourceType Reader::resource_type()
+{
+	return reven::metadata::ResourceType::Block;
+}
+
 }}} // namespace reven::block::reader

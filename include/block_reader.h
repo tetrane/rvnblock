@@ -7,6 +7,7 @@
 
 #include "common.h"
 
+#include <rvnmetadata/metadata.h>
 #include <rvnsqlite/resource_database.h>
 
 namespace reven {
@@ -284,6 +285,10 @@ public:
 	std::size_t cache_size() const {
 		return cache_.size();
 	}
+
+	static metadata::Version resource_version();
+
+	static metadata::ResourceType resource_type();
 
 private:
 	using CacheMap = std::unordered_map<std::int64_t, InstructionBlock>;
