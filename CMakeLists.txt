@@ -43,7 +43,8 @@ target_include_directories(rvnblock
 target_link_libraries(rvnblock
   PUBLIC
     rvnbinresource
-    rvnmetadata
+    rvnmetadata::common
+    rvnmetadata::sql
 )
 
 set(PUBLIC_HEADERS
