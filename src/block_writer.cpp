@@ -1,6 +1,7 @@
 #include <block_writer.h>
 
-#include <rvnmetadata/metadata.h>
+#include <rvnmetadata/metadata-common.h>
+#include <rvnmetadata/metadata-sql.h>
 
 // Get the SHA1 implementation from boost details.
 // As of today this is the easiest way of getting a SHA1 implementation without adding a dedicated dependency.
@@ -197,7 +198,7 @@ Writer::Writer(const char* filename, const char* tool_name,
     db_([filename, tool_name, tool_version, tool_info]() {
 	auto md = Meta(MetaType::Block, MetaVersion::from_string(format_version), tool_name, MetaVersion::from_string(tool_version),
 	               tool_info + std::string(" - using rvnblock ") + writer_version);
-	auto rdb = RDb::create(filename, md.to_sqlite_raw_metadata());
+	auto rdb = RDb::create(filename, metadata::to_sqlite_raw_metadata(md));
 	create_sqlite_db(rdb);
 	return rdb;
 }()),

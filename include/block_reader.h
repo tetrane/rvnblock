@@ -7,7 +7,7 @@
 
 #include "common.h"
 
-#include <rvnmetadata/metadata.h>
+#include <rvnmetadata/metadata-common.h>
 #include <rvnsqlite/resource_database.h>
 
 namespace reven {

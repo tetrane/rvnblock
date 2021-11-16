@@ -20,7 +20,8 @@ target_link_libraries(test_rvnblock
 
   PRIVATE
     rvnblock
-    rvnmetadata
+    rvnmetadata::common
+    rvnmetadata::sql
     Boost::unit_test_framework
 )
 

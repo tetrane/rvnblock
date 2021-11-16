@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#include <rvnmetadata/metadata.h>
+#include <rvnmetadata/metadata-sql.h>
 
 namespace reven {
 namespace block {
@@ -37,7 +37,7 @@ Reader::Reader(sqlite::ResourceDatabase db) :
                             "FROM interrupts WHERE transition_id = ? "
                             ";")
 {
-	const auto md = metadata::Metadata::from_raw_metadata(db_.metadata());
+	const auto md = metadata::from_raw_metadata(db_.metadata());
 	if (md.type() != metadata::ResourceType::Block) {
 		throw std::runtime_error("Cannot open a resource of type " +
 		                         metadata::to_string(md.type()).to_string());
