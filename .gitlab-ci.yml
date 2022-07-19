@@ -23,6 +23,7 @@ variables:
         - base_url=$(dirname $(git remote get-url origin))
         - mkdir $DEPENDENCY_NAME
         - cd /tmp
+        - export GIT_SSL_CAINFO="$CI_SERVER_TLS_CA_FILE"
         - git clone $base_url/$DEPENDENCY_NAME.git
         - cd $DEPENDENCY_NAME
         - git fetch origin $DEPENDENCY_COMMIT
