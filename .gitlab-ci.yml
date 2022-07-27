@@ -1,4 +1,4 @@
-image: debian:bullseye
+image: debian:stable
 
 stages:
     - setup:1
