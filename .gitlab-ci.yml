@@ -212,5 +212,5 @@ pages:
             - public
         expire_in: 30 days
 
-    only:
-        - master
+    rules:
+      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
